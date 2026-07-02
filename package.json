@@ -1,0 +1,34 @@
+{
+  "name": "codex-orchestrator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local MCP-based orchestrator that lets Claude Code delegate implementation tasks to OpenAI Codex, review, verify, and loop until a goal passes.",
+  "type": "module",
+  "bin": {
+    "codex-orchestrator": "dist/src/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "start:mcp": "node dist/src/mcp-server.js",
+    "cli": "node dist/src/cli.js",
+    "test": "npm run build && node --test dist/test/*.test.js",
+    "dry-run": "npm run build && node dist/src/cli.js run --dry-run --project-dir ./examples/sample-project --goal-file PROJECT_GOAL.md --verify \"node greet.test.js\""
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Solarthis/codex-massa.git"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "typescript": "^6.0.3"
+  }
+}

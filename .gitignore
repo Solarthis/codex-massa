@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.log
+# Orchestrator runtime state is per-project; ignore by default but keep examples' demo output committed if desired.
+.codex-orchestrator/
+!examples/**/.codex-orchestrator/
+.DS_Store
+.env
+.env.*

@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "codex-orchestrator": {
+      "command": "node",
+      "args": [
+        "/ABSOLUTE/PATH/TO/codex-orchestrator/dist/src/mcp-server.js"
+      ],
+      "env": {
+        "CODEX_ORCHESTRATOR_MODE": "mcp-server",
+        "CODEX_ORCHESTRATOR_MAX_RUNTIME_MS": "1800000"
+      }
+    }
+  }
+}

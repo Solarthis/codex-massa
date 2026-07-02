@@ -1,0 +1,23 @@
+{
+  "_comment": "Scripted steps applied by MockCodexClient in dry-run mode (no real Codex call). Step N is applied on the N-th codex_task call. Step 1 writes a deliberately wrong greeting so verification FAILS and the orchestrator sends a follow-up; step 2 fixes it so the loop completes.",
+  "steps": [
+    {
+      "message": "Created src/greet.js with an initial greet() implementation.",
+      "writeFiles": [
+        {
+          "path": "src/greet.js",
+          "content": "export function greet(name) {\n  // First attempt: wrong greeting word (will fail verification).\n  return `Hi, ${name}`;\n}\n"
+        }
+      ]
+    },
+    {
+      "message": "Fixed greet() to return the exact required 'Hello, <name>!' greeting.",
+      "writeFiles": [
+        {
+          "path": "src/greet.js",
+          "content": "export function greet(name) {\n  return `Hello, ${name}!`;\n}\n"
+        }
+      ]
+    }
+  ]
+}
