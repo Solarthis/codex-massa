@@ -98,9 +98,11 @@ async function hasHead(cwd: string): Promise<boolean> {
 
 async function countLines(file: string): Promise<number> {
   try {
+    // A git symlink is a path record, not permission to read its target.
+    if (!(await fs.lstat(file)).isFile()) return 0;
     const data = await fs.readFile(file, 'utf8');
     if (data.length === 0) return 0;
-    return data.split('\n').length;
+    return data.split('\n').length - (data.endsWith('\n') ? 1 : 0);
   } catch {
     return 0;
   }
@@ -129,12 +131,12 @@ export async function getDiffStat(projectDir: string): Promise<DiffStat> {
   // numstat for tracked changes (added\tdeleted\tpath); binary => '-'
   const numstatRef = headExists ? 'HEAD' : '';
   const numstat = await git(
-    ['diff', '--numstat', ...(numstatRef ? [numstatRef] : [])],
+    ['diff', '--no-renames', '--numstat', '-z', ...(numstatRef ? [numstatRef] : [])],
     cwd,
   );
   const counts = new Map<string, { added: number; deleted: number }>();
   if (numstat) {
-    for (const line of numstat.split('\n')) {
+    for (const line of numstat.split('\0')) {
       if (!line.trim()) continue;
       const parts = line.split('\t');
       if (parts.length < 3) continue;
@@ -146,17 +148,16 @@ export async function getDiffStat(projectDir: string): Promise<DiffStat> {
 
   // porcelain status for the authoritative file+status list (incl. untracked)
   const status = await git(
-    ['status', '--porcelain=v1', '--untracked-files=all'],
+    ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--no-renames'],
     cwd,
   );
   if (status) {
-    for (const line of status.split('\n')) {
+    for (const line of status.split('\0')) {
       if (!line.trim()) continue;
       const xy = line.slice(0, 2);
-      let filePart = line.slice(3);
-      // renames: "old -> new" (use the last segment in case a path contains ' -> ')
-      if (filePart.includes(' -> ')) filePart = filePart.split(' -> ').pop()!;
-      const p = filePart.trim();
+      // NUL-delimited porcelain leaves the filename exact, without C quoting.
+      // Rename detection is disabled so both old/new paths remain reviewable.
+      const p = line.slice(3);
       const isUntracked = xy === '??';
       const isDeleted = xy.includes('D');
       const statusLetter = isUntracked ? 'A' : xy.trim() || 'M';
@@ -207,6 +208,22 @@ export async function runVerification(
   return results;
 }
 
+/** Resolve an existing file only when both its lexical and real paths stay inside the project. */
+async function projectCheckFile(cwd: string, requested: string): Promise<string | null> {
+  try {
+    const inside = (root: string, file: string): boolean => {
+      const relative = path.relative(root, file);
+      return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+    };
+    const candidate = path.resolve(cwd, requested);
+    if (!inside(cwd, candidate)) return null;
+    const root = await fs.realpath(cwd);
+    const real = await fs.realpath(candidate);
+    if (!inside(root, real) || !(await fs.stat(real)).isFile()) return null;
+    return real;
+  } catch { return null; }
+}
+
 /** Evaluate a single checklist machine check against the repo. */
 export async function evaluateCheck(
   projectDir: string,
@@ -216,15 +233,16 @@ export async function evaluateCheck(
   switch (check.type) {
     case 'fileExists': {
       try {
-        await fs.access(path.resolve(cwd, check.path));
-        return true;
+        return (await projectCheckFile(cwd, check.path)) !== null;
       } catch {
         return false;
       }
     }
     case 'fileContains': {
       try {
-        const data = await fs.readFile(path.resolve(cwd, check.path), 'utf8');
+        const file = await projectCheckFile(cwd, check.path);
+        if (file === null) return false;
+        const data = await fs.readFile(file, 'utf8');
         try {
           return new RegExp(check.pattern).test(data);
         } catch {
@@ -269,7 +287,7 @@ export async function review(
       evidence = done ? describeCheck(item.check) : undefined;
     } else {
       // verification-gated item
-      done = allVerificationPassed;
+      done = verification.length > 0 && allVerificationPassed;
       evidence = done ? 'all verification commands passed' : undefined;
     }
     updated.push({ ...item, done, evidence });
@@ -313,3 +331,4 @@ function describeCheck(check: CheckSpec): string {
       return `command passed: ${check.command}`;
   }
 }
+
