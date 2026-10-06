@@ -492,3 +492,21 @@ code changes are needed.
 - **Loop paused unexpectedly** — check `get_loop_status` → `pending_approval`; a
   safety guard tripped. Review the change, then re-run with adjusted scope.
 ```
+
+
+### Verifier regression hardening (October 2026)
+
+- A checklist item without a machine check requires at least one actual passing
+  verification command. An empty verification list is not evidence of success.
+- File checks require an existing regular file with both lexical and resolved
+  paths inside the project. Escaping symlinks are rejected. This is a defensive
+  check, not an OS sandbox against concurrent malicious filesystem rewrites.
+- Git change capture uses NUL-delimited paths, preserving whitespace, quotes,
+  tabs/newlines and literal ` -> ` text. Renames appear as delete/add so both
+  affected paths reach the guards.
+- Untracked symlinks are not followed for line counts. A final newline no longer
+  adds a phantom line to the change totals.
+
+`npm test` runs the mocked integration suite, not Codex inference. The added tests
+use temporary synthetic Git projects. Actual model/CLI behavior is not certified
+by these checks; no model calls are needed to execute the suite.
