@@ -68,6 +68,12 @@ export interface LoopOptions {
    * only be set by an explicit human-in-the-loop approval path; default false.
    */
   autoApproveGuards?: boolean;
+  /**
+   * Guard names a human explicitly approved for this run (CLI --allow-guard).
+   * Their blocks are downgraded to warnings and still logged; every other
+   * guard keeps pausing the loop.
+   */
+  allowedGuards?: string[];
   /** Optional progress callback (used by the CLI to stream output). */
   onEvent?: (line: string) => void;
 }
@@ -86,6 +92,7 @@ export class LoopController {
   private readonly taskTimeoutMs: number;
   private readonly verifyTimeoutMs: number;
   private readonly autoApproveGuards: boolean;
+  private readonly allowedGuards: Set<string>;
   private readonly onEvent: (line: string) => void;
   private state!: RunState;
   private deadline = Number.POSITIVE_INFINITY;
@@ -104,6 +111,7 @@ export class LoopController {
     this.taskTimeoutMs = opts.taskTimeoutMs ?? DEFAULT_CODEX_TASK_TIMEOUT_MS;
     this.verifyTimeoutMs = opts.verifyTimeoutMs ?? DEFAULT_VERIFY_TIMEOUT_MS;
     this.autoApproveGuards = opts.autoApproveGuards ?? false;
+    this.allowedGuards = new Set(opts.allowedGuards ?? []);
     this.onEvent = opts.onEvent ?? (() => {});
   }
 
@@ -112,6 +120,15 @@ export class LoopController {
   }
 
   // ---- initialization ----------------------------------------------------
+
+  /** Downgrade human-approved guards (allowedGuards) from block to warn. */
+  private soften(results: GuardResult[]): GuardResult[] {
+    return results.map((r) =>
+      r.severity === 'block' && this.allowedGuards.has(r.guard)
+        ? { ...r, severity: 'warn', message: `${r.message} (allowed for this run by --allow-guard)` }
+        : r,
+    );
+  }
 
   /** Steps 1–3: read goal, gather context, build + persist the checklist. */
   async init(): Promise<RunState> {
@@ -243,7 +260,7 @@ export class LoopController {
         : buildFollowupPrompt(this.state);
 
     // GUARD: outgoing prompt intent.
-    const promptGuards = guardPrompt(prompt);
+    const promptGuards = this.soften(guardPrompt(prompt));
     guardResults.push(...promptGuards);
     if (hasBlock(promptGuards) && !this.autoApproveGuards) {
       const rec = this.baseRecord(iteration, startedAt, prompt, '', [], undefined, guardResults);
@@ -291,7 +308,7 @@ export class LoopController {
 
     // Step 6: review git diff against checklist + GUARD the diff.
     const diff = await getDiffStat(this.state.projectDir);
-    const diffGuards = guardDiff(this.state.projectDir, diff, this.thresholds);
+    const diffGuards = this.soften(guardDiff(this.state.projectDir, diff, this.thresholds));
     guardResults.push(...diffGuards);
     if (diffGuards.some((g) => g.triggered)) {
       await this.store.appendEvent('guard', iteration, 'diff guard(s) triggered', diffGuards);

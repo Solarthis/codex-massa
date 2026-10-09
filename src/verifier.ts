@@ -39,6 +39,9 @@ export function runCommand(
       shell: true,
       detached: true, // own process group so we can kill descendants on timeout
       env: process.env,
+      // stdin closed: `codex exec` (0.155+) reads extra prompt input from stdin
+      // and would otherwise wait on the open pipe forever.
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';
     let stderr = '';
