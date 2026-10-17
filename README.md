@@ -46,9 +46,9 @@ reports progress. See [The /massa command](#the-massa-command-for-claude-code).
 
 - **Runtime:** TypeScript / Node (ESM), built with `tsc`. Tests use the built-in
   `node:test` runner — no extra test dependency.
-- **Integration path:** **`codex mcp-server`** is the primary worker transport
-  (driven via the MCP SDK client over stdio). **`codex exec --json`** is the
-  fallback. Both sit behind one `CodexClient` interface alongside a **mock** impl.
+- **Integration path:** **`codex exec --json`** is the default worker transport
+  (codex-cli 0.155+ removed `codex mcp-server`, which remains available via
+  `--mode mcp-server` for older CLIs). Both sit behind one `CodexClient` interface alongside a **mock** impl.
 - **Dependencies (pinned):** `@modelcontextprotocol/sdk` (mandated SDK) and
   `zod` (the SDK's tool-schema API). Dev: `typescript`, `@types/node`. Nothing else.
 

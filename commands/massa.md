@@ -1,5 +1,5 @@
 ---
-description: Run the Codex Massa build flow — clarify the goal, then orchestrate OpenAI Codex to build it autonomously via the codex-orchestrator MCP server.
+description: Run the Codex Massa build flow (OpenAI Codex backend) — clarify the goal, then orchestrate OpenAI Codex to build it autonomously via the codex-orchestrator MCP server.
 argument-hint: [optional one-line idea]
 ---
 

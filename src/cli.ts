@@ -9,7 +9,7 @@
  *   status  Print a run's status (get_loop_status).
  *   stop    Request a cooperative stop of a run (stop_loop).
  *
- * Worker mode defaults to "mcp-server"; pass --dry-run (or --mode mock) to use
+ * Worker mode defaults to "exec"; pass --dry-run (or --mode mock) to use
  * the mock worker with no network / no real Codex call.
  */
 
@@ -45,7 +45,9 @@ Usage:
   codex-orchestrator run    --project-dir <dir> [--goal-file PROJECT_GOAL.md]
                             [--verify "<cmd>" ...] [--max-iterations N]
                             [--sandbox workspace-write] [--approval-policy never]
-                            [--max-runtime-ms N] [--mode mcp-server|exec|mock] [--dry-run]
+                            [--max-runtime-ms N] [--task-timeout-ms N]
+                            [--allow-guard <guard-name> ...]
+                            [--mode mcp-server|exec|mock] [--dry-run]
   codex-orchestrator review --project-dir <dir> [--goal-file PROJECT_GOAL.md] [--verify "<cmd>" ...]
   codex-orchestrator task   --project-dir <dir> --prompt "<text>" [--thread-id <id>] [--mode ...] [--dry-run]
   codex-orchestrator status --project-dir <dir> --run-id <id>
@@ -62,6 +64,8 @@ const options = {
   verify: { type: 'string' as const, multiple: true },
   'max-iterations': { type: 'string' as const },
   'max-runtime-ms': { type: 'string' as const },
+  'task-timeout-ms': { type: 'string' as const },
+  'allow-guard': { type: 'string' as const, multiple: true },
   sandbox: { type: 'string' as const },
   'approval-policy': { type: 'string' as const },
   mode: { type: 'string' as const },
@@ -74,7 +78,7 @@ const options = {
 
 function resolveMode(values: Record<string, unknown>): CodexMode {
   if (values['dry-run']) return 'mock';
-  const m = (values.mode as string) ?? 'mcp-server';
+  const m = (values.mode as string) ?? 'exec';
   if (m === 'mock' || m === 'mcp-server' || m === 'exec') return m;
   throw new Error(`Invalid --mode "${m}" (mock|mcp-server|exec)`);
 }
@@ -114,7 +118,13 @@ async function cmdRun(values: Record<string, unknown>): Promise<number> {
       codexMode: mode,
     },
     createCodexClient({ mode }),
-    { onEvent: out },
+    {
+      onEvent: out,
+      taskTimeoutMs: values['task-timeout-ms']
+        ? parseInt(values['task-timeout-ms'] as string, 10)
+        : undefined,
+      allowedGuards: (values['allow-guard'] as string[] | undefined) ?? [],
+    },
   );
 
   await controller.init();
