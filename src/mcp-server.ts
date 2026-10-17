@@ -110,7 +110,7 @@ export function buildServer(): McpServer {
           .enum(['read-only', 'workspace-write', 'danger-full-access'])
           .default(DEFAULT_SANDBOX),
         approval_policy: z
-          .enum(['untrusted', 'on-failure', 'on-request', 'never'])
+          .enum(['on-request', 'never'])
           .default(DEFAULT_APPROVAL_POLICY),
       },
     },

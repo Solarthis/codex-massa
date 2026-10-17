@@ -55,7 +55,7 @@ export interface CodexCliConfig {
   mcpStartTool: string;
   /** Tool name to CONTINUE a Codex conversation. */
   mcpReplyTool: string;
-  /** Subcommand for one-shot non-interactive runs (exec fallback). */
+  /** Subcommand for one-shot non-interactive runs (default exec transport). */
   execArgs: string[];
   /** Flag that switches `codex exec` to JSONL event output. */
   execJsonFlag: string;
@@ -88,11 +88,16 @@ export function validateSafetyConfig(
   sandbox: SandboxMode,
   approvalPolicy: ApprovalPolicy,
 ): void {
+  if (approvalPolicy !== 'on-request' && approvalPolicy !== 'never') {
+    throw new ConfigError(
+      `Unsupported approval_policy="${approvalPolicy}"; use "on-request" or "never" (Codex CLI 0.155+).`,
+    );
+  }
   if (sandbox === DANGER_SANDBOX && approvalPolicy === 'never') {
     throw new ConfigError(
       `Refusing to run with sandbox="${DANGER_SANDBOX}" and approval_policy="never": ` +
         `full filesystem access unattended is not allowed. Use sandbox="workspace-write" ` +
-        `or set approval_policy to "on-request"/"untrusted" and supervise the run.`,
+        `or set approval_policy to "on-request" and supervise the run.`,
     );
   }
 }

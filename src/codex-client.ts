@@ -3,9 +3,9 @@
  *
  *   MockCodexClient  — no network, deterministic; applies a scripted plan of
  *                      file writes/deletes so the full loop can be proven.
- *   McpCodexClient   — PRIMARY path: drives `codex mcp-server` over stdio using
+ *   McpCodexClient   — LEGACY path: drives `codex mcp-server` over stdio using
  *                      the official MCP SDK client.
- *   ExecCodexClient  — FALLBACK only: shells out to `codex exec --json` and
+ *   ExecCodexClient  — DEFAULT: shells out to `codex exec --json` and
  *                      parses the JSONL event stream.
  *
  * All version-dependent Codex names (subcommands, tool names, flags) come from
@@ -20,6 +20,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import {
   DEFAULT_CODEX_CLI,
+  validateSafetyConfig,
   type CodexCliConfig,
 } from './config.js';
 import { runCommand } from './verifier.js';
@@ -256,7 +257,7 @@ export class McpCodexClient implements CodexClient {
 }
 
 // =========================================================================
-// exec --json (fallback)
+// exec --json (default)
 // =========================================================================
 
 /**
@@ -332,6 +333,7 @@ export class ExecCodexClient implements CodexClient {
 
   async runTask(input: CodexTaskInput): Promise<CodexTaskResult> {
     const cwd = path.resolve(input.projectDir);
+    validateSafetyConfig(input.sandbox, input.approvalPolicy);
     // First turn:  codex exec --json -c sandbox_mode=... -c approval_policy=... "<prompt>"
     // Continuation: codex exec resume <id> --json -c ... "<prompt>"
     // `resume` MUST come immediately after `exec`. Sandbox and approval go in as
@@ -351,8 +353,10 @@ export class ExecCodexClient implements CodexClient {
     const command = parts.join(' ');
 
     const res = await runCommand(command, cwd, input.timeoutMs);
-    if (res.error && !res.stdout) {
-      throw new Error(`codex exec failed: ${res.error}`);
+    if (res.error || res.exitCode !== 0) {
+      const reason = res.error ?? `exit code ${res.exitCode ?? 'unknown'}`;
+      const diagnostics = (res.stderr || res.stdout).trim();
+      throw new Error(`codex exec failed: ${reason}${diagnostics ? `\n${diagnostics}` : ''}`);
     }
     const { text, threadId } = parseExecJsonl(res.stdout);
     return {

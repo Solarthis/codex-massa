@@ -9,8 +9,8 @@
 /** Codex sandbox modes (exact strings accepted by the Codex CLI `--sandbox`). */
 export type SandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
 
-/** Codex approval policies (exact strings accepted by `--ask-for-approval`). */
-export type ApprovalPolicy = 'untrusted' | 'on-failure' | 'on-request' | 'never';
+/** Supported string approval policies for Codex CLI 0.155+ and legacy MCP. */
+export type ApprovalPolicy = 'on-request' | 'never';
 
 /** Which transport the Codex client is using. */
 export type CodexMode = 'mock' | 'mcp-server' | 'exec';

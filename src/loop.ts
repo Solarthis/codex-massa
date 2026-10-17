@@ -320,6 +320,11 @@ export class LoopController {
       verification,
       diff,
     );
+    // Existing passing checks cannot turn a failed worker call into completion.
+    if (taskError) {
+      reviewResult.complete = false;
+      reviewResult.remainingGaps.push(`Codex task failed: ${taskError}`);
+    }
     this.state.checklist = checklist;
     await this.store.writeChecklist(this.state.goalFile, checklist);
     await this.store.appendEvent('review', iteration, 'review complete', reviewResult);
