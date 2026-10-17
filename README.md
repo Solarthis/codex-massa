@@ -83,10 +83,10 @@ reports progress. See [The /massa command](#the-massa-command-for-claude-code).
 # from a clean clone:
 npm install        # installs pinned deps
 npm run build      # compiles src/ + test/ to dist/
-npm test           # builds, then runs the full test suite (13 tests)
+npm test           # builds, then runs the full test suite
 ```
 
-`npm test` output ends with `pass 13 / fail 0`.
+`npm test` must finish with zero failures.
 
 ---
 
@@ -129,7 +129,7 @@ Start an autonomous loop; returns a `run_id` and runs in the background.
 | `max_iterations` | int | default 10 |
 | `verification_commands` | string[] | default `[]` |
 | `sandbox` | enum | `read-only` \| `workspace-write` \| `danger-full-access`; default **`workspace-write`** |
-| `approval_policy` | enum | `untrusted` \| `on-failure` \| `on-request` \| `never`; default **`never`** |
+| `approval_policy` | enum | `on-request` \| `never`; default **`never`** |
 
 ### `codex_task`
 Send one prompt to Codex; returns its output + thread/session id. Outgoing
@@ -187,7 +187,7 @@ Replace the absolute path. A copy is in [`.mcp.json.example`](.mcp.json.example)
         "/ABSOLUTE/PATH/TO/codex-orchestrator/dist/src/mcp-server.js"
       ],
       "env": {
-        "CODEX_ORCHESTRATOR_MODE": "mcp-server",
+        "CODEX_ORCHESTRATOR_MODE": "exec",
         "CODEX_ORCHESTRATOR_MAX_RUNTIME_MS": "1800000"
       }
     }
@@ -199,7 +199,7 @@ Equivalent CLI registration:
 
 ```bash
 claude mcp add codex-orchestrator \
-  -e CODEX_ORCHESTRATOR_MODE=mcp-server \
+  -e CODEX_ORCHESTRATOR_MODE=exec \
   -e CODEX_ORCHESTRATOR_MAX_RUNTIME_MS=1800000 \
   -- node /ABSOLUTE/PATH/TO/codex-orchestrator/dist/src/mcp-server.js
 ```
@@ -246,8 +246,8 @@ Selected via `CODEX_ORCHESTRATOR_MODE` (MCP server) or `--mode` / `--dry-run` (C
 | Mode | Transport | Use |
 |---|---|---|
 | `mock` | none (scripted) | dry-run / tests; applies steps from `<project>/mock-plan.json` (or an inline plan) |
-| `mcp-server` | `codex mcp-server` over stdio (MCP SDK) | **primary** real path |
-| `exec` | `codex exec --json` per call | fallback when MCP transport is impractical |
+| `exec` | `codex exec --json` per call | **default** real path for Codex CLI 0.155+ |
+| `mcp-server` | `codex mcp-server` over stdio (MCP SDK) | explicit legacy mode for older CLIs that still provide this subcommand |
 
 ---
 
@@ -277,13 +277,17 @@ printenv OPENAI_API_KEY | codex login --with-api-key   # API key via stdin
 
 ```bash
 codex --help
-codex mcp-server --help               # primary transport
-codex exec --help                     # fallback transport
+codex exec --help                     # default worker transport
+codex exec resume --help              # continuation support
 ```
 
+Only when explicitly selecting legacy `--mode mcp-server` on an older CLI,
+check `codex mcp-server --help`. This subcommand was removed in Codex CLI 0.155;
+it is separate from this package's own MCP server, which still exposes the five tools.
+
 Config lives at `~/.codex/config.toml` (`CODEX_HOME` defaults to `~/.codex`).
-The orchestrator passes `cwd`, `sandbox`, and `approval-policy` per call; you do
-not need to pre-configure those.
+The exec transport runs in the project directory and passes `sandbox_mode` and
+`approval_policy` through per-call `-c` overrides; you do not need to pre-configure those.
 
 ---
 
@@ -438,8 +442,8 @@ Resulting `final-report.md` (iteration log):
 ```
 
 **Running it for real (with Codex):** drop the `--dry-run` flag and ensure Codex
-is installed/authenticated. The loop will use `codex mcp-server`, threading the
-conversation across iterations via the returned `threadId`. To exercise the real
+is installed/authenticated. The loop will use `codex exec --json`, threading the
+conversation across iterations via `codex exec resume <thread_id>`. To exercise the real
 `git diff` review on the sample, `git init` the target first:
 
 ```bash
@@ -453,26 +457,39 @@ node dist/src/cli.js run --project-dir ./examples/sample-project --verify "node 
 
 The Codex flag/tool surface drifts between versions. All version-dependent names
 are centralized in [`config.ts`](src/config.ts) (`DEFAULT_CODEX_CLI`) so they can
-be adjusted in one place. As built (verified against the current Codex CLI):
+be adjusted in one place. The default exec transport targets Codex CLI 0.155+:
 
-- **Launch MCP:** `codex mcp-server` (over stdio). *Not* `codex mcp serve`
+- **Legacy MCP only:** `codex mcp-server` (over stdio), on older CLIs that still
+  provide it. *Not* `codex mcp serve`
   (`codex mcp` is the separate "manage external servers" command).
-- **MCP tools:** `codex` (start) and `codex-reply` (continue). The `codex` tool
+- **Legacy MCP tools:** `codex` (start) and `codex-reply` (continue). The `codex` tool
   takes **kebab-case** args (`prompt`, `cwd`, `sandbox`, `approval-policy`) and
   **rejects unknown fields**; `codex-reply` takes **camelCase** `{ threadId, prompt }`.
-- **Session id:** returned in `structuredContent.threadId`; reused as `threadId`.
-- **exec fallback:** `codex exec --json "<prompt>"`; resume with
+- **Legacy MCP session id:** returned in `structuredContent.threadId`; reused as `threadId`.
+- **Default exec:** `codex exec --json -c 'sandbox_mode="workspace-write"' -c 'approval_policy="never"' "<prompt>"`; resume with
   `codex exec resume <id>`. The JSONL stream is tagged by dotted `type`
   (`thread.started` carries `thread_id`; the final answer is in an
   `item.completed` whose `item.type === "agent_message"`, field `text`). A legacy
   `EventMsg` fallback parser is included.
 - **Sandbox values:** `read-only` | `workspace-write` | `danger-full-access`.
-- **Approval values:** `untrusted` | `on-failure` | `on-request` | `never`.
+- **Approval values:** `on-request` | `never`. Retired `untrusted` and
+  `on-failure` values are rejected before execution, including in legacy mode.
+  Codex's granular approval objects are not exposed by this package's string API.
+- **Exec failures:** nonzero exits, signals, and timeouts fail the task even if
+  stdout contains a partial reply. CLI tasks exit nonzero with diagnostics; MCP
+  tasks return `status: "error"`. Loops retain the error as a gap and cannot
+  complete that iteration merely because existing verification checks pass.
 - **Guarded:** `--dangerously-bypass-approvals-and-sandbox` / `--yolo` and
   `--sandbox danger-full-access` are never emitted.
 
 If a future Codex renames a tool or flag, edit `DEFAULT_CODEX_CLI` — no other
 code changes are needed.
+
+To check the supported string policies against a real CLI without credentials or
+a model call, run `node scripts/check-codex-policies.mjs [path/to/codex]`.
+It uses an empty temporary `CODEX_HOME`, a read-only sandbox, and an intentionally
+missing output schema to stop accepted policies before task execution; retired
+policies must fail CLI argument validation.
 
 ---
 
@@ -484,7 +501,7 @@ code changes are needed.
   server scans the *server's* cwd. Launch the MCP server from the project dir, or
   use the CLI `status` command with `--project-dir`.
 - **Real Codex run errors immediately** — run `codex login status` and
-  `codex mcp-server --help`; confirm the binary is on `PATH` (override with the
+  `codex exec --help`; confirm the binary is on `PATH` (override with the
   `CODEX_BIN` env var).
 - **Git diff shows "(not a git repository)"** — the diff-based guards/review need
   a git repo; `git init` the target. The checklist + verification still work

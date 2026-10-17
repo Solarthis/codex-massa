@@ -33,6 +33,8 @@ test('server registers all 5 tools with the exact specified input names', async 
       assert.ok(byName.has(n), `missing tool: ${n}`);
     }
     assert.equal(tools.length, 5, 'exactly five tools must be registered');
+    const policySchema = (byName.get('start_project_loop')!.inputSchema as any).properties.approval_policy;
+    assert.deepEqual(policySchema.enum, ['on-request', 'never']);
 
     const props = (name: string) =>
       Object.keys((byName.get(name)!.inputSchema as { properties?: object }).properties ?? {});
