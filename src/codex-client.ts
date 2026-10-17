@@ -332,17 +332,19 @@ export class ExecCodexClient implements CodexClient {
 
   async runTask(input: CodexTaskInput): Promise<CodexTaskResult> {
     const cwd = path.resolve(input.projectDir);
-    // First turn:  codex exec [--json -s <sandbox> -a <approval>] "<prompt>"
-    // Continuation: codex exec resume <id> [--json -s ... -a ...] "<prompt>"
-    // `resume` MUST come immediately after `exec`.
+    // First turn:  codex exec --json -c sandbox_mode=... -c approval_policy=... "<prompt>"
+    // Continuation: codex exec resume <id> --json -c ... "<prompt>"
+    // `resume` MUST come immediately after `exec`. Sandbox and approval go in as
+    // -c overrides: Codex 0.155 dropped `-a` from exec and never had `-s` on
+    // `exec resume`, but both accept -c.
     const parts = [this.cli.bin, ...this.cli.execArgs];
     if (input.threadId) parts.push('resume', input.threadId);
     parts.push(
       this.cli.execJsonFlag,
-      '-s',
-      input.sandbox,
-      '-a',
-      input.approvalPolicy,
+      '-c',
+      shellQuote(`sandbox_mode="${input.sandbox}"`),
+      '-c',
+      shellQuote(`approval_policy="${input.approvalPolicy}"`),
     );
     // Prompt passed via a single-quoted arg; runCommand uses a shell.
     parts.push(shellQuote(input.prompt));

@@ -12,7 +12,7 @@
  *
  * The worker mode (mock | mcp-server | exec) and the max-runtime limit are NOT
  * tool inputs (the spec fixes the inputs); they come from environment variables:
- *   CODEX_ORCHESTRATOR_MODE            default "mcp-server"
+ *   CODEX_ORCHESTRATOR_MODE            default "exec"
  *   CODEX_ORCHESTRATOR_MAX_RUNTIME_MS  default 1800000 (30 min)
  */
 
@@ -39,7 +39,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 function resolveMode(): CodexMode {
-  const m = (process.env.CODEX_ORCHESTRATOR_MODE ?? 'mcp-server').trim();
+  const m = (process.env.CODEX_ORCHESTRATOR_MODE ?? 'exec').trim();
   if (m === 'mock' || m === 'mcp-server' || m === 'exec') return m;
   throw new Error(`Invalid CODEX_ORCHESTRATOR_MODE="${m}" (mock|mcp-server|exec)`);
 }
